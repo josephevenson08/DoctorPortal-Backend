@@ -13,7 +13,7 @@ The database includes the following entities:
 ## Files
 - `Blank_diagram.png` - ER diagram of the database schema
 
-## Frontend - Sprint 1 (josephevenson08)
+## Frontend - Sprint 2 (josephevenson08)
 
 ### Pages
 - `client/src/pages/auth.tsx` - Login page
