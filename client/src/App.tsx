@@ -8,6 +8,7 @@ import AuthPage from "@/pages/auth";
 import MfaPage from "@/pages/mfa";
 import SignupPage from "@/pages/signup";
 import ForgotPasswordPage from "@/pages/forgot-password";
+import AuditLogPage from "@/pages/audit-log";
 
 import DashboardHome from "@/pages/dashboard/home";
 import PatientsPage from "@/pages/dashboard/patients";
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/dashboard/records" component={RecordsPage} />
       <Route path="/dashboard/referrals" component={ReferralsPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
+      <Route path="/audit-log" component={AuditLogPage} />
       
       <Route component={NotFound} />
     </Switch>

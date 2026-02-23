@@ -44,12 +44,17 @@ const formatPhoneNumber = (value: string) => {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
 };
 
-const formatName = (value: string) => {
-  return value.replace(/[^a-zA-Z\s\-']/g, "");
-};
+const formatName = (value: string) => value.replace(/[^a-zA-Z\s\-']/g, "");
+const formatEmail = (value: string) => value.replace(/[^a-zA-Z0-9@._\-+]/g, "");
+const formatCity = (value: string) => value.replace(/[^a-zA-Z\s]/g, "");
+const formatState = (value: string) => value.replace(/[^a-zA-Z]/g, "");
+const formatZip = (value: string) => value.replace(/[^0-9]/g, "");
 
-const formatEmail = (value: string) => {
-  return value.replace(/[^a-zA-Z0-9@._\-+]/g, "");
+const emptyForm = {
+  firstName: "", lastName: "", dob: "", gender: "",
+  email: "", phone: "",
+  street: "", city: "", state: "", zip: "",
+  emergencyName: "", emergencyPhone: "",
 };
 
 export default function PatientsPage() {
@@ -59,44 +64,30 @@ export default function PatientsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewPatient, setViewPatient] = useState<Patient | null>(null);
   const [editPatient, setEditPatient] = useState<Patient | null>(null);
-  const [editForm, setEditForm] = useState({
-    firstName: "",
-    lastName: "",
-    dob: "",
-    gender: "",
-    email: "",
-    phone: "",
-    address: "",
-    emergencyName: "",
-    emergencyPhone: "",
-  });
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    dob: "",
-    gender: "",
-    email: "",
-    phone: "",
-    address: "",
-    emergencyName: "",
-    emergencyPhone: "",
-  });
+  const [form, setForm] = useState({ ...emptyForm });
+  const [editForm, setEditForm] = useState({ ...emptyForm });
 
   const { data: patients = [], isLoading } = useQuery<Patient[]>({
     queryKey: ["/api/patients"],
   });
 
   const createPatient = useMutation({
-    mutationFn: (data: typeof form) => apiRequest("POST", "/api/patients", data),
+    mutationFn: (data: typeof form) => apiRequest("POST", "/api/patients", {
+      ...data,
+      dob: data.dob ? new Date(data.dob).toISOString().split("T")[0] : "",
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/patients"] });
       setDialogOpen(false);
-      setForm({ firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "", address: "", emergencyName: "", emergencyPhone: "" });
+      setForm({ ...emptyForm });
     },
   });
 
   const updatePatient = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/patients/${id}`, data),
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/patients/${id}`, {
+      ...data,
+      dob: data.dob ? new Date(data.dob).toISOString().split("T")[0] : "",
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/patients"] });
       setEditPatient(null);
@@ -122,11 +113,14 @@ export default function PatientsPage() {
     setEditForm({
       firstName: patient.firstName || "",
       lastName: patient.lastName || "",
-      dob: patient.dob || "",
+      dob: patient.dob ? String(patient.dob).split("T")[0] : "",
       gender: patient.gender || "",
       email: patient.email || "",
       phone: patient.phone || "",
-      address: patient.address || "",
+      street: patient.street || "",
+      city: patient.city || "",
+      state: patient.state || "",
+      zip: patient.zip || "",
       emergencyName: patient.emergencyName || "",
       emergencyPhone: patient.emergencyPhone || "",
     });
@@ -166,11 +160,7 @@ export default function PatientsPage() {
               </div>
               <Popover open={filterOpen} onOpenChange={setFilterOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="text-slate-600"
-                    data-testid="button-filter"
-                  >
+                  <Button variant="outline" className="text-slate-600" data-testid="button-filter">
                     <Filter className="w-4 h-4 mr-2" />
                     Filter{genderFilter !== "All" ? `: ${genderFilter}` : ""}
                   </Button>
@@ -183,14 +173,9 @@ export default function PatientsPage() {
                         key={option}
                         data-testid={`filter-gender-${option.toLowerCase()}`}
                         className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${
-                          genderFilter === option
-                            ? "bg-blue-50 text-blue-700 font-medium"
-                            : "text-slate-600 hover:bg-slate-100"
+                          genderFilter === option ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100"
                         }`}
-                        onClick={() => {
-                          setGenderFilter(option);
-                          setFilterOpen(false);
-                        }}
+                        onClick={() => { setGenderFilter(option); setFilterOpen(false); }}
                       >
                         {option}
                       </button>
@@ -235,25 +220,18 @@ export default function PatientsPage() {
                     filteredPatients.map((patient) => (
                       <TableRow key={patient.id} className="hover:bg-slate-50/50 transition-colors" data-testid={`row-patient-${patient.id}`}>
                         <TableCell className="font-medium text-slate-900">
-                          <div>
-                            {patient.firstName} {patient.lastName}
-                            <div className="text-xs text-slate-400 font-normal md:hidden">{patient.email}</div>
-                          </div>
+                          {patient.firstName} {patient.lastName}
                         </TableCell>
-                        <TableCell>{patient.dob}</TableCell>
+                        <TableCell>{patient.dob ? new Date(patient.dob).toLocaleDateString() : "—"}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            patient.gender === 'Female' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700'
+                            patient.gender === "Female" ? "bg-pink-50 text-pink-700" : "bg-blue-50 text-blue-700"
                           }`}>
                             {patient.gender || "—"}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{patient.phone || "—"}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-slate-600">{patient.email || "—"}</span>
-                        </TableCell>
+                        <TableCell><span className="text-sm">{patient.phone || "—"}</span></TableCell>
+                        <TableCell><span className="text-sm text-slate-600">{patient.email || "—"}</span></TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -262,23 +240,13 @@ export default function PatientsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                data-testid={`button-view-${patient.id}`}
-                                onClick={() => setViewPatient(patient)}
-                              >
+                              <DropdownMenuItem data-testid={`button-view-${patient.id}`} onClick={() => setViewPatient(patient)}>
                                 <Eye className="w-4 h-4 mr-2 text-slate-500" /> View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                data-testid={`button-edit-${patient.id}`}
-                                onClick={() => openEditDialog(patient)}
-                              >
+                              <DropdownMenuItem data-testid={`button-edit-${patient.id}`} onClick={() => openEditDialog(patient)}>
                                 <Edit className="w-4 h-4 mr-2 text-slate-500" /> Edit Record
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-600"
-                                data-testid={`button-delete-${patient.id}`}
-                                onClick={() => deletePatient.mutate(patient.id)}
-                              >
+                              <DropdownMenuItem className="text-red-600 focus:text-red-600" data-testid={`button-delete-${patient.id}`} onClick={() => deletePatient.mutate(patient.id)}>
                                 <Trash2 className="w-4 h-4 mr-2" /> Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -294,41 +262,38 @@ export default function PatientsPage() {
         </Card>
       </div>
 
+      {/* Add Patient Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Patient</DialogTitle>
             <DialogDescription>Fill in patient details below.</DialogDescription>
           </DialogHeader>
           <form
             data-testid="form-add-patient"
-            onSubmit={(e) => {
-              e.preventDefault();
-              createPatient.mutate(form);
-            }}
+            onSubmit={(e) => { e.preventDefault(); createPatient.mutate(form); }}
             className="space-y-4"
           >
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name <span className="text-red-500">*</span></Label>
-                <Input data-testid="input-firstName" id="firstName" required maxLength={50} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: formatName(e.target.value) })} placeholder="John" />
+                <Input id="firstName" required maxLength={50} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: formatName(e.target.value) })} placeholder="John" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name <span className="text-red-500">*</span></Label>
-                <Input data-testid="input-lastName" id="lastName" required maxLength={50} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: formatName(e.target.value) })} placeholder="Doe" />
+                <Input id="lastName" required maxLength={50} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: formatName(e.target.value) })} placeholder="Doe" />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="dob">Date of Birth <span className="text-red-500">*</span></Label>
-                <Input data-testid="input-dob" id="dob" type="date" required value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} />
+                <Input id="dob" type="date" required value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gender">Gender <span className="text-red-500">*</span></Label>
-                <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })} required>
-                  <SelectTrigger data-testid="select-gender">
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
+                <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Male">Male</SelectItem>
                     <SelectItem value="Female">Female</SelectItem>
@@ -337,33 +302,51 @@ export default function PatientsPage() {
                 </Select>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input data-testid="input-email" id="email" type="email" maxLength={100} value={form.email} onChange={(e) => setForm({ ...form, email: formatEmail(e.target.value) })} placeholder="patient@email.com" />
+                <Input id="email" type="email" maxLength={100} value={form.email} onChange={(e) => setForm({ ...form, email: formatEmail(e.target.value) })} placeholder="patient@email.com" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
-                <Input data-testid="input-phone" id="phone" type="tel" required maxLength={14} value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
+                <Input id="phone" type="tel" required maxLength={14} value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Input data-testid="input-address" id="address" maxLength={200} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="123 Main St, City, State ZIP" />
+              <Label htmlFor="street">Street Address</Label>
+              <Input id="street" maxLength={100} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="123 Main St" />
             </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input id="city" maxLength={64} value={form.city} onChange={(e) => setForm({ ...form, city: formatCity(e.target.value) })} placeholder="Springfield" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State</Label>
+                <Input id="state" maxLength={2} value={form.state} onChange={(e) => setForm({ ...form, state: formatState(e.target.value).toUpperCase() })} placeholder="IL" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zip">Zip Code</Label>
+                <Input id="zip" maxLength={5} value={form.zip} onChange={(e) => setForm({ ...form, zip: formatZip(e.target.value) })} placeholder="62701" />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="emergencyName">Emergency Contact Name</Label>
-                <Input data-testid="input-emergencyName" id="emergencyName" maxLength={100} value={form.emergencyName} onChange={(e) => setForm({ ...form, emergencyName: formatName(e.target.value) })} placeholder="Jane Doe" />
+                <Label htmlFor="emergencyName">Emergency Contact</Label>
+                <Input id="emergencyName" maxLength={100} value={form.emergencyName} onChange={(e) => setForm({ ...form, emergencyName: formatName(e.target.value) })} placeholder="Jane Doe" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="emergencyPhone">Emergency Phone</Label>
-                <Input data-testid="input-emergencyPhone" id="emergencyPhone" type="tel" maxLength={14} value={form.emergencyPhone} onChange={(e) => setForm({ ...form, emergencyPhone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
+                <Input id="emergencyPhone" type="tel" maxLength={14} value={form.emergencyPhone} onChange={(e) => setForm({ ...form, emergencyPhone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
               </div>
             </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" data-testid="button-submit-patient" className="bg-blue-600 hover:bg-blue-700" disabled={createPatient.isPending}>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={createPatient.isPending}>
                 {createPatient.isPending ? "Adding..." : "Add Patient"}
               </Button>
             </DialogFooter>
@@ -371,6 +354,7 @@ export default function PatientsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* View Patient Dialog */}
       <Dialog open={!!viewPatient} onOpenChange={(open) => { if (!open) setViewPatient(null); }}>
         <DialogContent className="max-w-lg" data-testid="dialog-view-patient">
           <DialogHeader>
@@ -382,57 +366,72 @@ export default function PatientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-slate-500">First Name</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-firstName">{viewPatient.firstName}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.firstName}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Last Name</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-lastName">{viewPatient.lastName}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.lastName}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-slate-500">Date of Birth</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-dob">{viewPatient.dob || "—"}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.dob ? new Date(viewPatient.dob).toLocaleDateString() : "—"}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Gender</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-gender">{viewPatient.gender || "—"}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.gender || "—"}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-slate-500">Email</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-email">{viewPatient.email || "—"}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.email || "—"}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Phone</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-phone">{viewPatient.phone || "—"}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.phone || "—"}</p>
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-slate-500">Address</Label>
-                <p className="text-sm font-medium text-slate-900" data-testid="view-address">{viewPatient.address || "—"}</p>
+                <Label className="text-xs text-slate-500">Street Address</Label>
+                <p className="text-sm font-medium text-slate-900">{viewPatient.street || "—"}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">City</Label>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.city || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">State</Label>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.state || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Zip Code</Label>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.zip || "—"}</p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-slate-500">Emergency Contact Name</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-emergencyName">{viewPatient.emergencyName || "—"}</p>
+                  <Label className="text-xs text-slate-500">Emergency Contact</Label>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.emergencyName || "—"}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Emergency Phone</Label>
-                  <p className="text-sm font-medium text-slate-900" data-testid="view-emergencyPhone">{viewPatient.emergencyPhone || "—"}</p>
+                  <p className="text-sm font-medium text-slate-900">{viewPatient.emergencyPhone || "—"}</p>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setViewPatient(null)} data-testid="button-close-view">Close</Button>
+                <Button variant="outline" onClick={() => setViewPatient(null)}>Close</Button>
               </DialogFooter>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Edit Patient Dialog */}
       <Dialog open={!!editPatient} onOpenChange={(open) => { if (!open) setEditPatient(null); }}>
-        <DialogContent className="max-w-lg" data-testid="dialog-edit-patient">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-patient">
           <DialogHeader>
             <DialogTitle>Edit Patient</DialogTitle>
             <DialogDescription>Update patient information below.</DialogDescription>
@@ -440,33 +439,29 @@ export default function PatientsPage() {
           {editPatient && (
             <form
               data-testid="form-edit-patient"
-              onSubmit={(e) => {
-                e.preventDefault();
-                updatePatient.mutate({ id: editPatient.id, data: editForm });
-              }}
+              onSubmit={(e) => { e.preventDefault(); updatePatient.mutate({ id: editPatient.id, data: editForm }); }}
               className="space-y-4"
             >
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-firstName">First Name <span className="text-red-500">*</span></Label>
-                  <Input data-testid="edit-input-firstName" id="edit-firstName" required maxLength={50} value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: formatName(e.target.value) })} placeholder="John" />
+                  <Input id="edit-firstName" required maxLength={50} value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: formatName(e.target.value) })} placeholder="John" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-lastName">Last Name <span className="text-red-500">*</span></Label>
-                  <Input data-testid="edit-input-lastName" id="edit-lastName" required maxLength={50} value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: formatName(e.target.value) })} placeholder="Doe" />
+                  <Input id="edit-lastName" required maxLength={50} value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: formatName(e.target.value) })} placeholder="Doe" />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-dob">Date of Birth <span className="text-red-500">*</span></Label>
-                  <Input data-testid="edit-input-dob" id="edit-dob" type="date" required value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
+                  <Input id="edit-dob" type="date" required value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-gender">Gender <span className="text-red-500">*</span></Label>
-                  <Select value={editForm.gender} onValueChange={(v) => setEditForm({ ...editForm, gender: v })} required>
-                    <SelectTrigger data-testid="edit-select-gender">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
+                  <Select value={editForm.gender} onValueChange={(v) => setEditForm({ ...editForm, gender: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Male">Male</SelectItem>
                       <SelectItem value="Female">Female</SelectItem>
@@ -475,33 +470,51 @@ export default function PatientsPage() {
                   </Select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-email">Email</Label>
-                  <Input data-testid="edit-input-email" id="edit-email" type="email" maxLength={100} value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: formatEmail(e.target.value) })} placeholder="patient@email.com" />
+                  <Input id="edit-email" type="email" maxLength={100} value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: formatEmail(e.target.value) })} placeholder="patient@email.com" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-phone">Phone <span className="text-red-500">*</span></Label>
-                  <Input data-testid="edit-input-phone" id="edit-phone" type="tel" required maxLength={14} value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
+                  <Input id="edit-phone" type="tel" required maxLength={14} value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="edit-address">Address</Label>
-                <Input data-testid="edit-input-address" id="edit-address" maxLength={200} value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} placeholder="123 Main St, City, State ZIP" />
+                <Label htmlFor="edit-street">Street Address</Label>
+                <Input id="edit-street" maxLength={100} value={editForm.street} onChange={(e) => setEditForm({ ...editForm, street: e.target.value })} placeholder="123 Main St" />
               </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-city">City</Label>
+                  <Input id="edit-city" maxLength={64} value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: formatCity(e.target.value) })} placeholder="Springfield" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-state">State</Label>
+                  <Input id="edit-state" maxLength={2} value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: formatState(e.target.value).toUpperCase() })} placeholder="IL" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-zip">Zip Code</Label>
+                  <Input id="edit-zip" maxLength={5} value={editForm.zip} onChange={(e) => setEditForm({ ...editForm, zip: formatZip(e.target.value) })} placeholder="62701" />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-emergencyName">Emergency Contact Name</Label>
-                  <Input data-testid="edit-input-emergencyName" id="edit-emergencyName" maxLength={100} value={editForm.emergencyName} onChange={(e) => setEditForm({ ...editForm, emergencyName: formatName(e.target.value) })} placeholder="Jane Doe" />
+                  <Label htmlFor="edit-emergencyName">Emergency Contact</Label>
+                  <Input id="edit-emergencyName" maxLength={100} value={editForm.emergencyName} onChange={(e) => setEditForm({ ...editForm, emergencyName: formatName(e.target.value) })} placeholder="Jane Doe" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-emergencyPhone">Emergency Phone</Label>
-                  <Input data-testid="edit-input-emergencyPhone" id="edit-emergencyPhone" type="tel" maxLength={14} value={editForm.emergencyPhone} onChange={(e) => setEditForm({ ...editForm, emergencyPhone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
+                  <Input id="edit-emergencyPhone" type="tel" maxLength={14} value={editForm.emergencyPhone} onChange={(e) => setEditForm({ ...editForm, emergencyPhone: formatPhoneNumber(e.target.value) })} placeholder="(555) 555-5555" />
                 </div>
               </div>
+
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditPatient(null)} data-testid="button-cancel-edit">Cancel</Button>
-                <Button type="submit" data-testid="button-submit-edit" className="bg-blue-600 hover:bg-blue-700" disabled={updatePatient.isPending}>
+                <Button type="button" variant="outline" onClick={() => setEditPatient(null)}>Cancel</Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={updatePatient.isPending}>
                   {updatePatient.isPending ? "Saving..." : "Save Changes"}
                 </Button>
               </DialogFooter>

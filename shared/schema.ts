@@ -1,8 +1,8 @@
-import { mysqlTable, text, varchar, int, date, timestamp, datetime } from "drizzle-orm/mysql-core";
+import { mysqlTable, text, varchar, int, date, datetime } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table (for authentication)
+// Users table (doctors who log in)
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   username: varchar("username", { length: 64 }).notNull().unique(),
@@ -12,28 +12,11 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 120 }).notNull(),
   phone: varchar("phone", { length: 15 }),
   specialty: varchar("specialty", { length: 50 }),
-  licenseNumber: varchar("license_number", { length: 30 }),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-
-// Doctors table
-export const doctors = mysqlTable("doctors", {
-  id: int("doctor_ID").primaryKey().autoincrement(),
-  firstName: varchar("first_name", { length: 64 }).notNull(),
-  lastName: varchar("last_name", { length: 64 }).notNull(),
-  email: varchar("email", { length: 120 }).notNull(),
-  phone: varchar("phone", { length: 15 }),
-  specialty: varchar("specialty", { length: 50 }),
-  licenseNumber: varchar("license_number", { length: 30 }).unique(),
-  hireDate: date("hire_date"),
-});
-
-export const insertDoctorSchema = createInsertSchema(doctors).omit({ id: true });
-export type InsertDoctor = z.infer<typeof insertDoctorSchema>;
-export type Doctor = typeof doctors.$inferSelect;
 
 // Patients table
 export const patients = mysqlTable("patients", {
@@ -44,7 +27,10 @@ export const patients = mysqlTable("patients", {
   gender: varchar("gender", { length: 10 }),
   email: varchar("email", { length: 120 }),
   phone: varchar("phone", { length: 15 }),
-  address: text("address"),
+  street: varchar("street", { length: 100 }),
+  city: varchar("city", { length: 64 }),
+  state: varchar("state", { length: 50 }),
+  zip: varchar("zip", { length: 10 }),
   emergencyName: varchar("emergency_name", { length: 64 }),
   emergencyPhone: varchar("emergency_phone", { length: 15 }),
 });
@@ -87,3 +73,17 @@ export const referrals = mysqlTable("referrals", {
 export const insertReferralSchema = createInsertSchema(referrals).omit({ id: true });
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type Referral = typeof referrals.$inferSelect;
+
+// Audit Logs table
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").primaryKey().autoincrement(),
+  username: varchar("username", { length: 64 }),
+  action: varchar("action", { length: 100 }).notNull(),
+  details: text("details"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  timestamp: datetime("timestamp").default(new Date()),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, timestamp: true });
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;

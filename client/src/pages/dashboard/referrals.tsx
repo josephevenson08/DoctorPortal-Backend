@@ -2,12 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearch } from "wouter";
 import DashboardLayout from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, ArrowRightLeft, Clock, CheckCircle2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Search, Plus, Clock, CheckCircle2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Referral, Patient, Doctor } from "@shared/schema";
+import type { Referral, Patient, User } from "@shared/schema";
 
 export default function ReferralsPage() {
   const searchString = useSearch();
@@ -56,19 +56,12 @@ export default function ReferralsPage() {
     queryKey: ["/api/patients"],
   });
 
-  const { data: doctors = [] } = useQuery<Doctor[]>({
+  // Doctors are now users
+  const { data: doctors = [] } = useQuery<User[]>({
     queryKey: ["/api/doctors"],
   });
 
-  const matchedDoctorId = useMemo(() => {
-    if (!currentUser) return null;
-    const match = doctors.find(
-      (d) => d.firstName === currentUser.firstName && d.lastName === currentUser.lastName
-    );
-    return match ? match.id : null;
-  }, [currentUser, doctors]);
-
-  const myDoctorId = matchedDoctorId ?? (currentUser?.id ?? null);
+  const myDoctorId = currentUser?.id ?? null;
 
   const [lastPrefillSearch, setLastPrefillSearch] = useState("");
 
@@ -81,7 +74,7 @@ export default function ReferralsPage() {
       const now = new Date().toISOString().slice(0, 16);
       setForm({
         patientId,
-        referringDoctorId: myDoctorId ? myDoctorId.toString() : currentUser.id.toString(),
+        referringDoctorId: currentUser.id.toString(),
         referredDoctorId: "",
         dateTime: now,
         notes: notes || "",
@@ -91,19 +84,6 @@ export default function ReferralsPage() {
       window.history.replaceState({}, "", "/dashboard/referrals");
     }
   }, [searchString, currentUser, lastPrefillSearch, myDoctorId]);
-
-  const combinedDoctors = useMemo(() => {
-    const result: Array<{ id: number; firstName: string; lastName: string; specialty?: string | null }> = [...doctors];
-    if (currentUser && !result.some((d) => d.firstName === currentUser.firstName && d.lastName === currentUser.lastName)) {
-      result.push({
-        id: currentUser.id,
-        firstName: currentUser.firstName || "",
-        lastName: currentUser.lastName || "",
-        specialty: currentUser.specialty || null,
-      });
-    }
-    return result;
-  }, [doctors, currentUser]);
 
   const createReferral = useMutation({
     mutationFn: (data: any) => {
@@ -124,16 +104,12 @@ export default function ReferralsPage() {
 
   const acceptReferral = useMutation({
     mutationFn: (id: number) => apiRequest("PATCH", `/api/referrals/${id}`, { status: "accepted" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals"] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/referrals"] }); },
   });
 
   const completeReferral = useMutation({
     mutationFn: (id: number) => apiRequest("PATCH", `/api/referrals/${id}`, { status: "completed" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals"] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/referrals"] }); },
   });
 
   const getPatientName = (patientId: number) => {
@@ -142,7 +118,7 @@ export default function ReferralsPage() {
   };
 
   const getDoctorLabel = (doctorId: number) => {
-    const d = combinedDoctors.find((doc) => doc.id === doctorId);
+    const d = doctors.find((doc) => doc.id === doctorId);
     return d ? `Dr. ${d.firstName} ${d.lastName}${d.specialty ? ` (${d.specialty})` : ""}` : `Doctor #${doctorId}`;
   };
 
@@ -153,11 +129,8 @@ export default function ReferralsPage() {
 
   const filteredReferrals = useMemo(() => {
     let list = referrals.filter(isMyReferral);
-    if (filterTab === "sent") {
-      list = list.filter((r) => myDoctorId && r.referringDoctorId === myDoctorId);
-    } else if (filterTab === "received") {
-      list = list.filter((r) => myDoctorId && r.referredDoctorId === myDoctorId);
-    }
+    if (filterTab === "sent") list = list.filter((r) => myDoctorId && r.referringDoctorId === myDoctorId);
+    else if (filterTab === "received") list = list.filter((r) => myDoctorId && r.referredDoctorId === myDoctorId);
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((r) => {
@@ -168,7 +141,7 @@ export default function ReferralsPage() {
       });
     }
     return list;
-  }, [referrals, filterTab, search, currentUser, patients, combinedDoctors]);
+  }, [referrals, filterTab, search, patients, doctors]);
 
   const getReferralDirection = (r: Referral) => {
     if (!myDoctorId) return "unknown";
@@ -222,51 +195,21 @@ export default function ReferralsPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button
-            variant={filterTab === "all" ? "default" : "outline"}
-            size="sm"
-            data-testid="button-filter-all"
-            onClick={() => setFilterTab("all")}
-            className={filterTab === "all" ? "bg-blue-600 hover:bg-blue-700" : ""}
-          >
-            All
+          <Button variant={filterTab === "all" ? "default" : "outline"} size="sm" onClick={() => setFilterTab("all")} className={filterTab === "all" ? "bg-blue-600 hover:bg-blue-700" : ""}>All</Button>
+          <Button variant={filterTab === "sent" ? "default" : "outline"} size="sm" onClick={() => setFilterTab("sent")} className={filterTab === "sent" ? "bg-blue-600 hover:bg-blue-700" : ""}>
+            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />Sent
           </Button>
-          <Button
-            variant={filterTab === "sent" ? "default" : "outline"}
-            size="sm"
-            data-testid="button-filter-sent"
-            onClick={() => setFilterTab("sent")}
-            className={filterTab === "sent" ? "bg-blue-600 hover:bg-blue-700" : ""}
-          >
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-            Sent
-          </Button>
-          <Button
-            variant={filterTab === "received" ? "default" : "outline"}
-            size="sm"
-            data-testid="button-filter-received"
-            onClick={() => setFilterTab("received")}
-            className={filterTab === "received" ? "bg-blue-600 hover:bg-blue-700" : ""}
-          >
-            <ArrowDownLeft className="w-3.5 h-3.5 mr-1.5" />
-            Received
+          <Button variant={filterTab === "received" ? "default" : "outline"} size="sm" onClick={() => setFilterTab("received")} className={filterTab === "received" ? "bg-blue-600 hover:bg-blue-700" : ""}>
+            <ArrowDownLeft className="w-3.5 h-3.5 mr-1.5" />Received
           </Button>
         </div>
 
         <div className="grid gap-6">
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    data-testid="input-search-referrals"
-                    placeholder="Search referrals..."
-                    className="pl-10"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input placeholder="Search referrals..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
@@ -278,24 +221,23 @@ export default function ReferralsPage() {
                       <div className="flex-1 space-y-2">
                         <Skeleton className="h-5 w-40" />
                         <Skeleton className="h-4 w-64" />
-                        <Skeleton className="h-4 w-48" />
                       </div>
                     </div>
                   </div>
                 ))
               ) : filteredReferrals.length === 0 ? (
-                <p className="text-center py-8 text-slate-500" data-testid="text-no-referrals">No referrals found.</p>
+                <p className="text-center py-8 text-slate-500">No referrals found.</p>
               ) : (
                 filteredReferrals.map((referral) => {
                   const direction = getReferralDirection(referral);
                   const isIncoming = direction === "received";
                   return (
-                    <div key={referral.id} data-testid={`card-referral-${referral.id}`} className="group flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:shadow-md transition-all duration-200">
+                    <div key={referral.id} className="group flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:shadow-md transition-all duration-200">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
-                        isIncoming ? 'bg-orange-100 text-orange-600' :
-                        referral.status === 'pending' ? 'bg-amber-100 text-amber-600' :
-                        referral.status === 'accepted' ? 'bg-blue-100 text-blue-600' :
-                        'bg-green-100 text-green-600'
+                        isIncoming ? "bg-orange-100 text-orange-600" :
+                        referral.status === "pending" ? "bg-amber-100 text-amber-600" :
+                        referral.status === "accepted" ? "bg-blue-100 text-blue-600" :
+                        "bg-green-100 text-green-600"
                       }`}>
                         {isIncoming ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
                       </div>
@@ -324,41 +266,21 @@ export default function ReferralsPage() {
 
                         {referral.notes && (
                           <div className="pt-3 mt-3 border-t border-slate-50">
-                            <p className="text-sm text-slate-600">
-                              <span className="font-medium text-slate-900">Note:</span> {referral.notes}
-                            </p>
+                            <p className="text-sm text-slate-600"><span className="font-medium text-slate-900">Note:</span> {referral.notes}</p>
                           </div>
                         )}
 
                         {referral.dateTime && (
-                          <p className="text-xs text-slate-400 mt-1">
-                            Date: {new Date(referral.dateTime).toLocaleDateString()}
-                          </p>
+                          <p className="text-xs text-slate-400 mt-1">Date: {new Date(referral.dateTime).toLocaleDateString()}</p>
                         )}
                       </div>
 
                       <div className="flex sm:flex-col justify-center gap-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-4">
                         {isIncoming && referral.status === "pending" && (
-                          <Button
-                            size="sm"
-                            className="flex-1 bg-green-600 hover:bg-green-700"
-                            data-testid={`button-accept-referral-${referral.id}`}
-                            onClick={() => acceptReferral.mutate(referral.id)}
-                            disabled={acceptReferral.isPending}
-                          >
-                            Accept
-                          </Button>
+                          <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => acceptReferral.mutate(referral.id)} disabled={acceptReferral.isPending}>Accept</Button>
                         )}
                         {isIncoming && referral.status === "accepted" && (
-                          <Button
-                            size="sm"
-                            className="flex-1 bg-blue-600 hover:bg-blue-700"
-                            data-testid={`button-complete-referral-${referral.id}`}
-                            onClick={() => completeReferral.mutate(referral.id)}
-                            disabled={completeReferral.isPending}
-                          >
-                            Complete
-                          </Button>
+                          <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => completeReferral.mutate(referral.id)} disabled={completeReferral.isPending}>Complete</Button>
                         )}
                         {!isIncoming && referral.status === "pending" && (
                           <Badge variant="outline" className="text-amber-600 border-amber-200 text-xs">Awaiting Response</Badge>
@@ -383,7 +305,6 @@ export default function ReferralsPage() {
             <DialogDescription>Create a new patient referral to a specialist.</DialogDescription>
           </DialogHeader>
           <form
-            data-testid="form-create-referral"
             onSubmit={(e) => {
               e.preventDefault();
               if (!form.patientId || !form.referredDoctorId || !form.dateTime || !currentUser) return;
@@ -392,56 +313,53 @@ export default function ReferralsPage() {
             className="space-y-4"
           >
             <div className="space-y-2">
-              <Label htmlFor="ref-patient">Patient <span className="text-red-500">*</span></Label>
-              <Select value={form.patientId} onValueChange={(v) => setForm({ ...form, patientId: v })} required>
-                <SelectTrigger data-testid="select-referral-patient">
-                  <SelectValue placeholder="Select patient" />
-                </SelectTrigger>
+              <Label>Patient <span className="text-red-500">*</span></Label>
+              <Select value={form.patientId} onValueChange={(v) => setForm({ ...form, patientId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
                 <SelectContent>
                   {patients.map((p) => (
-                    <SelectItem key={p.id} value={p.id.toString()} data-testid={`select-patient-option-${p.id}`}>
-                      {p.firstName} {p.lastName}
-                    </SelectItem>
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.firstName} {p.lastName}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ref-from">Referring Doctor</Label>
+              <Label>Referring Doctor</Label>
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
-                {currentUser
-                  ? `Dr. ${currentUser.firstName} ${currentUser.lastName}${currentUser.specialty ? ` (${currentUser.specialty})` : ""}`
-                  : "Loading..."}
+                {currentUser ? `Dr. ${currentUser.firstName} ${currentUser.lastName}${currentUser.specialty ? ` (${currentUser.specialty})` : ""}` : "Loading..."}
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ref-to">Refer To <span className="text-red-500">*</span></Label>
-              <Select value={form.referredDoctorId} onValueChange={(v) => setForm({ ...form, referredDoctorId: v })} required>
-                <SelectTrigger data-testid="select-referred-doctor">
-                  <SelectValue placeholder="Select specialist to refer to" />
-                </SelectTrigger>
+              <Label>Refer To <span className="text-red-500">*</span></Label>
+              <Select value={form.referredDoctorId} onValueChange={(v) => setForm({ ...form, referredDoctorId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select specialist to refer to" /></SelectTrigger>
                 <SelectContent>
-                  {combinedDoctors
+                  {doctors
                     .filter((d) => !currentUser || d.id !== currentUser.id)
                     .map((d) => (
-                      <SelectItem key={d.id} value={d.id.toString()} data-testid={`select-referred-doctor-option-${d.id}`}>
+                      <SelectItem key={d.id} value={d.id.toString()}>
                         Dr. {d.firstName} {d.lastName}{d.specialty ? ` (${d.specialty})` : ""}
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ref-dateTime">Date & Time <span className="text-red-500">*</span></Label>
-              <Input data-testid="input-referral-datetime" id="ref-dateTime" type="datetime-local" required value={form.dateTime} onChange={(e) => setForm({ ...form, dateTime: e.target.value })} />
+              <Label>Date & Time <span className="text-red-500">*</span></Label>
+              <Input type="datetime-local" required value={form.dateTime} onChange={(e) => setForm({ ...form, dateTime: e.target.value })} />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ref-notes">Notes</Label>
-              <Textarea data-testid="input-referral-notes" id="ref-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Reason for referral..." />
+              <Label>Notes</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Reason for referral..." />
             </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" data-testid="button-submit-referral" className="bg-blue-600 hover:bg-blue-700" disabled={createReferral.isPending || !form.patientId || !form.referredDoctorId || !form.dateTime || !currentUser}>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={createReferral.isPending || !form.patientId || !form.referredDoctorId || !form.dateTime || !currentUser}>
                 {createReferral.isPending ? "Creating..." : "Create Referral"}
               </Button>
             </DialogFooter>

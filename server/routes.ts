@@ -1,9 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPatientSchema, insertDoctorSchema, insertMedicalRecordSchema, insertReferralSchema, insertUserSchema } from "@shared/schema";
+import { insertPatientSchema, insertMedicalRecordSchema, insertReferralSchema, insertUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { db } from "./db";
+import { auditLogs } from "@shared/schema";
+
+async function logAction(username: string, action: string, details: string, ip: string) {
+  try {
+    await db.insert(auditLogs).values({ username, action, details, ipAddress: ip });
+  } catch (e) {
+    console.error("Failed to write audit log:", e);
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -20,6 +30,7 @@ export async function registerRoutes(
       }
       const user = await storage.createUser(data);
       const { password, ...safeUser } = user;
+      await logAction(data.username, "REGISTER", `New account created for ${data.firstName} ${data.lastName}`, req.ip || "unknown");
       return res.status(201).json(safeUser);
     } catch (e) {
       if (e instanceof ZodError) {
@@ -37,50 +48,43 @@ export async function registerRoutes(
       }
       const user = await storage.getUserByUsername(username);
       if (!user || user.password !== password) {
+        await logAction(username, "LOGIN_FAILED", `Failed login attempt for username: ${username}`, req.ip || "unknown");
         return res.status(401).json({ message: "Invalid credentials" });
       }
       const { password: _, ...safeUser } = user;
+      await logAction(username, "LOGIN", `${user.firstName} ${user.lastName} logged in successfully`, req.ip || "unknown");
       return res.json(safeUser);
     } catch (e) {
       throw e;
     }
   });
 
-  // ── Doctors ───────────────────────────────────────────
-  app.get("/api/doctors", async (_req, res) => {
-    const allDoctors = await storage.getDoctors();
-    return res.json(allDoctors);
+  app.post("/api/auth/logout", async (req, res) => {
+    const { username } = req.body;
+    if (username) {
+      await logAction(username, "LOGOUT", `${username} logged out`, req.ip || "unknown");
+    }
+    return res.json({ success: true });
   });
 
-  app.get("/api/doctors/:id", async (req, res) => {
-    const doctor = await storage.getDoctor(Number(req.params.id));
-    if (!doctor) return res.status(404).json({ message: "Doctor not found" });
-    return res.json(doctor);
-  });
-
-  app.post("/api/doctors", async (req, res) => {
+  // ── Audit Logs ────────────────────────────────────────
+  app.get("/api/audit-logs", async (req, res) => {
+    const { passcode } = req.query;
+    if (passcode !== "999999") {
+      return res.status(403).json({ message: "Invalid passcode" });
+    }
     try {
-      const data = insertDoctorSchema.parse(req.body);
-      const doctor = await storage.createDoctor(data);
-      return res.status(201).json(doctor);
+      const logs = await db.select().from(auditLogs).orderBy(auditLogs.timestamp);
+      return res.json(logs);
     } catch (e) {
-      if (e instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(e).message });
-      }
       throw e;
     }
   });
 
-  app.patch("/api/doctors/:id", async (req, res) => {
-    const updated = await storage.updateDoctor(Number(req.params.id), req.body);
-    if (!updated) return res.status(404).json({ message: "Doctor not found" });
-    return res.json(updated);
-  });
-
-  app.delete("/api/doctors/:id", async (req, res) => {
-    const deleted = await storage.deleteDoctor(Number(req.params.id));
-    if (!deleted) return res.status(404).json({ message: "Doctor not found" });
-    return res.status(204).send();
+  // ── Doctors (now served from users table) ─────────────
+  app.get("/api/doctors", async (_req, res) => {
+    const allDoctors = await storage.getDoctors();
+    return res.json(allDoctors);
   });
 
   // ── Patients ──────────────────────────────────────────
@@ -97,7 +101,11 @@ export async function registerRoutes(
 
   app.post("/api/patients", async (req, res) => {
     try {
-      const data = insertPatientSchema.parse(req.body);
+      const body = { ...req.body };
+      if (body.dob && typeof body.dob === "string") {
+        body.dob = new Date(body.dob);
+      }
+      const data = insertPatientSchema.parse(body);
       const patient = await storage.createPatient(data);
       return res.status(201).json(patient);
     } catch (e) {
@@ -109,7 +117,11 @@ export async function registerRoutes(
   });
 
   app.patch("/api/patients/:id", async (req, res) => {
-    const updated = await storage.updatePatient(Number(req.params.id), req.body);
+    const body = { ...req.body };
+    if (body.dob && typeof body.dob === "string") {
+      body.dob = new Date(body.dob);
+    }
+    const updated = await storage.updatePatient(Number(req.params.id), body);
     if (!updated) return res.status(404).json({ message: "Patient not found" });
     return res.json(updated);
   });

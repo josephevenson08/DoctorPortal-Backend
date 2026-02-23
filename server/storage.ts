@@ -1,6 +1,5 @@
 import {
   type User, type InsertUser, users,
-  type Doctor, type InsertDoctor, doctors,
   type Patient, type InsertPatient, patients,
   type MedicalRecord, type InsertMedicalRecord, medicalRecords,
   type Referral, type InsertReferral, referrals,
@@ -9,17 +8,11 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  // Users
+  // Users / Doctors
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-
-  // Doctors
-  getDoctors(): Promise<Doctor[]>;
-  getDoctor(id: number): Promise<Doctor | undefined>;
-  createDoctor(doctor: InsertDoctor): Promise<Doctor>;
-  updateDoctor(id: number, doctor: Partial<InsertDoctor>): Promise<Doctor | undefined>;
-  deleteDoctor(id: number): Promise<boolean>;
+  getDoctors(): Promise<User[]>;
 
   // Patients
   getPatients(): Promise<Patient[]>;
@@ -46,7 +39,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
 
-  // ── Users ──────────────────────────────────────────────
+  // ── Users / Doctors ────────────────────────────────────
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -63,30 +56,8 @@ export class DatabaseStorage implements IStorage {
     return created!;
   }
 
-  // ── Doctors ────────────────────────────────────────────
-  async getDoctors(): Promise<Doctor[]> {
-    return db.select().from(doctors);
-  }
-
-  async getDoctor(id: number): Promise<Doctor | undefined> {
-    const [doctor] = await db.select().from(doctors).where(eq(doctors.id, id));
-    return doctor;
-  }
-
-  async createDoctor(doctor: InsertDoctor): Promise<Doctor> {
-    const [result] = await db.insert(doctors).values(doctor);
-    const created = await this.getDoctor((result as any).insertId);
-    return created!;
-  }
-
-  async updateDoctor(id: number, doctor: Partial<InsertDoctor>): Promise<Doctor | undefined> {
-    await db.update(doctors).set(doctor).where(eq(doctors.id, id));
-    return this.getDoctor(id);
-  }
-
-  async deleteDoctor(id: number): Promise<boolean> {
-    const [result] = await db.delete(doctors).where(eq(doctors.id, id));
-    return (result as any).affectedRows > 0;
+  async getDoctors(): Promise<User[]> {
+    return db.select().from(users);
   }
 
   // ── Patients ───────────────────────────────────────────
