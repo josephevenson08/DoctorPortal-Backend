@@ -48,6 +48,26 @@ export default function ReferralsPage() {
     } catch { return null; }
   });
 
+  useEffect(() => {
+    // Keep account context in sync when switching users during a running session.
+    const syncCurrentUser = () => {
+      try {
+        const raw = localStorage.getItem("mediportal_user");
+        setCurrentUser(raw ? JSON.parse(raw) : null);
+      } catch {
+        setCurrentUser(null);
+      }
+    };
+
+    syncCurrentUser();
+    window.addEventListener("focus", syncCurrentUser);
+    window.addEventListener("storage", syncCurrentUser);
+    return () => {
+      window.removeEventListener("focus", syncCurrentUser);
+      window.removeEventListener("storage", syncCurrentUser);
+    };
+  }, []);
+
   const { data: referrals = [], isLoading: loadingReferrals } = useQuery<Referral[]>({
     queryKey: ["/api/referrals"],
   });
@@ -142,6 +162,14 @@ export default function ReferralsPage() {
     }
     return list;
   }, [referrals, filterTab, search, patients, doctors]);
+
+  const availableReferralDoctors = useMemo(() => {
+    return doctors.filter((d) => {
+      if (!currentUser) return true;
+      // Compare as strings to avoid number/string id mismatches.
+      return String(d.id) !== String(currentUser.id);
+    });
+  }, [doctors, currentUser]);
 
   const getReferralDirection = (r: Referral) => {
     if (!myDoctorId) return "unknown";
@@ -333,19 +361,20 @@ export default function ReferralsPage() {
 
             <div className="space-y-2">
               <Label>Refer To <span className="text-red-500">*</span></Label>
-              <Select value={form.referredDoctorId} onValueChange={(v) => setForm({ ...form, referredDoctorId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select specialist to refer to" /></SelectTrigger>
-                <SelectContent>
-                  {doctors
-                    .filter((d) => !currentUser || d.id !== currentUser.id)
-                    .map((d) => (
+                <Select value={form.referredDoctorId} onValueChange={(v) => setForm({ ...form, referredDoctorId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select specialist to refer to" /></SelectTrigger>
+                  <SelectContent>
+                  {availableReferralDoctors.map((d) => (
                       <SelectItem key={d.id} value={d.id.toString()}>
                         Dr. {d.firstName} {d.lastName}{d.specialty ? ` (${d.specialty})` : ""}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  {availableReferralDoctors.length === 0 && (
+                    <div className="px-2 py-1.5 text-sm text-slate-500">No other doctors available</div>
+                  )}
+                  </SelectContent>
+                </Select>
+              </div>
 
             <div className="space-y-2">
               <Label>Date & Time <span className="text-red-500">*</span></Label>
