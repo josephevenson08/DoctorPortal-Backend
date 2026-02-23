@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, Activity, AlertCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Users, Activity, AlertCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +17,6 @@ export default function DashboardHome() {
   });
 
   const isLoading = loadingPatients || loadingReferrals;
-
   const pendingReferrals = referrals.filter((r) => r.status === "pending");
 
   const stats = [
@@ -26,12 +25,6 @@ export default function DashboardHome() {
       value: patients.length.toLocaleString(),
       icon: Users,
       color: "bg-blue-500",
-    },
-    {
-      title: "Appointments Today",
-      value: "—",
-      icon: Calendar,
-      color: "bg-indigo-500",
     },
     {
       title: "Pending Referrals",
@@ -59,8 +52,7 @@ export default function DashboardHome() {
           <p className="text-slate-500 mt-2">Overview of your practice performance and daily activities.</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {stats.map((stat, i) => (
             <Card key={i} data-testid={`stat-card-${i}`} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200">
               <CardContent className="p-6 flex items-center justify-between">
@@ -75,16 +67,16 @@ export default function DashboardHome() {
                       <p className="text-sm font-medium text-slate-500" data-testid={`stat-title-${i}`}>{stat.title}</p>
                       <div className="flex items-baseline gap-2 mt-2">
                         <h3 className="text-2xl font-bold text-slate-900" data-testid={`stat-value-${i}`}>{stat.value}</h3>
-                        {'change' in stat && 'trend' in stat && (
-                          <span className={`text-xs font-medium flex items-center ${stat.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                            {stat.trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                        {"change" in stat && "trend" in stat && (
+                          <span className={`text-xs font-medium flex items-center ${stat.trend === "up" ? "text-green-600" : "text-red-600"}`}>
+                            {stat.trend === "up" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                             {stat.change}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className={`p-3 rounded-xl ${stat.color} bg-opacity-10`}>
-                      <stat.icon className={`w-6 h-6 ${stat.color.replace('bg-', 'text-')}`} />
+                      <stat.icon className={`w-6 h-6 ${stat.color.replace("bg-", "text-")}`} />
                     </div>
                   </>
                 )}
@@ -94,7 +86,6 @@ export default function DashboardHome() {
         </div>
 
         <div className="grid gap-8 md:grid-cols-2">
-          {/* Recent Patients */}
           <Card className="border-slate-200 shadow-sm col-span-1" data-testid="card-recent-patients">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-slate-900">Recent Patients</CardTitle>
@@ -129,10 +120,10 @@ export default function DashboardHome() {
                         <div className="w-2 h-2 rounded-full bg-blue-500 group-hover:scale-125 transition-transform" />
                         <div>
                           <p className="font-medium text-slate-900" data-testid={`text-patient-name-${patient.id}`}>{patient.firstName} {patient.lastName}</p>
-                          <p className="text-sm text-slate-500" data-testid={`text-patient-gender-${patient.id}`}>{patient.gender || "—"}</p>
+                          <p className="text-sm text-slate-500" data-testid={`text-patient-gender-${patient.id}`}>{patient.gender || "-"}</p>
                         </div>
                       </div>
-                      <p className="font-medium text-slate-900" data-testid={`text-patient-phone-${patient.id}`}>{patient.phone || "—"}</p>
+                      <p className="font-medium text-slate-900" data-testid={`text-patient-phone-${patient.id}`}>{patient.phone || "-"}</p>
                     </div>
                   ))
                 )}
@@ -140,7 +131,6 @@ export default function DashboardHome() {
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
           <Card className="border-slate-200 shadow-sm col-span-1">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-slate-900">Recent Activity</CardTitle>
@@ -160,7 +150,7 @@ export default function DashboardHome() {
                 ) : referrals.length === 0 ? (
                   <p className="text-sm text-slate-500 text-center py-4" data-testid="text-no-activity">No recent activity.</p>
                 ) : (
-                  referrals.slice(0, 3).map((referral, i) => {
+                  referrals.slice(0, 3).map((referral) => {
                     const patient = patients.find((p) => p.id === referral.patientId);
                     const patientName = patient ? `${patient.firstName} ${patient.lastName}` : `Patient #${referral.patientId}`;
                     return (
