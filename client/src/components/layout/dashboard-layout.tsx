@@ -36,7 +36,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
-import type { Patient, Referral, Doctor } from "@shared/schema";
+import type { Patient, Referral, User } from "@shared/schema";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -80,7 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     queryKey: ["/api/referrals"],
   });
 
-  const { data: allDoctors = [] } = useQuery<Doctor[]>({
+  const { data: allDoctors = [] } = useQuery<User[]>({
     queryKey: ["/api/doctors"],
   });
 

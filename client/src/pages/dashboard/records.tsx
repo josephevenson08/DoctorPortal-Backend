@@ -36,7 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { MedicalRecord, Patient, Doctor } from "@shared/schema";
+import type { MedicalRecord, Patient, User as AppUser } from "@shared/schema";
 
 export default function RecordsPage() {
   const [, navigate] = useLocation();
@@ -63,7 +63,7 @@ export default function RecordsPage() {
     queryKey: ["/api/patients"],
   });
 
-  const { data: doctors = [] } = useQuery<Doctor[]>({
+  const { data: doctors = [] } = useQuery<AppUser[]>({
     queryKey: ["/api/doctors"],
   });
 
@@ -80,7 +80,7 @@ export default function RecordsPage() {
             firstName: user.firstName,
             lastName: user.lastName,
             specialty: user.specialty || "",
-          } as Doctor);
+          } as AppUser);
         }
       }
     } catch {}
