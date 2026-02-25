@@ -116,44 +116,6 @@ Backend source is in `server`.
 - npm
 - MySQL running locally or remotely
 
-### 1) Install dependencies
-
-```bash
-npm install
-```
-
-### 2) Configure environment
-
-Create/update `.env` in project root:
-
-```env
-DATABASE_URL=mysql://<username>:<password>@<host>:3306/<database_name>
-```
-
-### 3) Push database schema
-
-```bash
-npm run db:push
-```
-
-### 4) Start development server
-
-```bash
-npm run dev
-```
-
-The app/API run on:
-- `http://localhost:5000`
-
-## Scripts
-
-- `npm run dev` -> Start backend + Vite integration in development
-- `npm run dev:client` -> Start frontend dev server only
-- `npm run build` -> Build project for production
-- `npm run start` -> Run production build
-- `npm run check` -> TypeScript type-check
-- `npm run db:push` -> Sync Drizzle schema to MySQL
-
 ## Tools and Languages Used
 
 ### Languages
