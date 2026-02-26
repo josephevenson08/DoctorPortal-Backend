@@ -14,7 +14,7 @@ This project provides:
 ## System Architecture
 
 - Frontend: React + TypeScript single-page app served by Vite
-- Backend: Express + TypeScript REST API
+- Backend: Express + TypeScript REST API (modular feature routes)
 - Database: MySQL with Drizzle ORM schema and queries
 - Shared contract: `shared/schema.ts` (types + validation schemas)
 
@@ -74,11 +74,17 @@ Backend source is in `server`.
 - Audit Logs:
   - `GET /api/audit-logs?passcode=999999`
 
-### Backend internals
-- `server/routes.ts`: route handlers and request validation
-- `server/storage.ts`: database access layer
-- `server/db.ts`: database connection bootstrap
+### Backend internals (modular)
 - `server/index.ts`: app startup, middleware, and HTTP server
+- `server/routes.ts`: central route registration
+- `server/storage.ts`: database access layer (unchanged)
+- `server/db.ts`: database connection bootstrap
+- `server/lib/audit.ts`: shared audit log writer helper
+- `server/modules/auth/routes.ts`: auth + doctors endpoints
+- `server/modules/patients/routes.ts`: patient CRUD endpoints
+- `server/modules/records/routes.ts`: medical record CRUD endpoints
+- `server/modules/referrals/routes.ts`: referral CRUD endpoints
+- `server/modules/audit/routes.ts`: audit log endpoint
 
 ## Database
 
@@ -105,6 +111,8 @@ Backend source is in `server`.
 
 - `client/` -> Frontend app
 - `server/` -> Backend API and runtime server
+- `server/modules/` -> Feature-based backend routes
+- `server/lib/` -> Shared backend utilities
 - `shared/` -> Shared DB schema/types between client/server
 - `attached_assets/` -> Additional project assets
 - `Blank_diagram.png` -> ER-style schema diagram
@@ -144,6 +152,8 @@ npm run dev
 
 The app/API run on:
 - `http://localhost:5000`
+
+Note: this repository's `npm run dev` currently sets a `DATABASE_URL` directly in `package.json`. If you want to rely only on `.env`, remove the inline `DATABASE_URL=...` from the `dev` script.
 
 ## Scripts
 
