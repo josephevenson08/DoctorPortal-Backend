@@ -4,12 +4,10 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev:client": "vite dev --port 5000",
-    "dev": "cross-env NODE_ENV=development DATABASE_URL=mysql://mediportal_user:MediPortal123!@localhost:3306/doctor_patient_db tsx server/index.ts",
-    "build": "tsx script/build.ts",
-    "start": "NODE_ENV=production node dist/index.cjs",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "dev": "vite dev --port 5000",
+    "build": "vite build",
+    "start": "vite preview --port 5000",
+    "check": "tsc"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
