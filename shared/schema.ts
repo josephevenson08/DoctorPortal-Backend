@@ -7,6 +7,7 @@ export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   username: varchar("username", { length: 64 }).notNull().unique(),
   password: text("password").notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("doctor"),
   firstName: varchar("first_name", { length: 64 }).notNull(),
   lastName: varchar("last_name", { length: 64 }).notNull(),
   email: varchar("email", { length: 120 }).notNull(),
@@ -14,7 +15,15 @@ export const users = mysqlTable("users", {
   specialty: varchar("specialty", { length: 50 }),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertUserSchema = createInsertSchema(users, {
+  username: z.string().min(3).max(64),
+  password: z.string().min(8).max(255),
+  firstName: z.string().min(1).max(64),
+  lastName: z.string().min(1).max(64),
+  email: z.string().email().max(120),
+  phone: z.string().max(15).optional().nullable(),
+  specialty: z.string().max(50).optional().nullable(),
+}).omit({ id: true, role: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 

@@ -11,8 +11,14 @@ export interface IStorage {
   // Users / Doctors
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getDoctors(): Promise<User[]>;
+  updateUserProfile(
+    id: number,
+    user: Partial<Pick<InsertUser, "email" | "phone">>,
+  ): Promise<User | undefined>;
+  updateUserPassword(id: number, password: string): Promise<User | undefined>;
 
   // Patients
   getPatients(): Promise<Patient[]>;
@@ -50,6 +56,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     const [result] = await db.insert(users).values(user);
     const created = await this.getUser((result as any).insertId);
@@ -58,6 +69,19 @@ export class DatabaseStorage implements IStorage {
 
   async getDoctors(): Promise<User[]> {
     return db.select().from(users);
+  }
+
+  async updateUserProfile(
+    id: number,
+    user: Partial<Pick<InsertUser, "email" | "phone">>,
+  ): Promise<User | undefined> {
+    await db.update(users).set(user).where(eq(users.id, id));
+    return this.getUser(id);
+  }
+
+  async updateUserPassword(id: number, password: string): Promise<User | undefined> {
+    await db.update(users).set({ password }).where(eq(users.id, id));
+    return this.getUser(id);
   }
 
   // ── Patients ───────────────────────────────────────────

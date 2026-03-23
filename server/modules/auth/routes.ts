@@ -4,18 +4,41 @@ import { insertUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { logAction } from "../../lib/audit";
+import { getSessionUser, requireAuth, toSafeUser } from "../../lib/auth";
+import { clearFailedLogins, getLoginBlockRemainingMs, recordFailedLogin } from "../../lib/login-security";
+import { hashPassword, validatePasswordStrength, verifyPassword } from "../../lib/password";
+
+const updateProfileSchema = insertUserSchema.pick({
+  email: true,
+  phone: true,
+});
+
+const changePasswordSchema = insertUserSchema.pick({ password: true }).extend({
+  currentPassword: insertUserSchema.shape.password,
+});
 
 export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body); // Validate incoming payload.
+      const passwordError = validatePasswordStrength(data.password);
+      if (passwordError) {
+        return res.status(400).json({ message: passwordError });
+      }
+
       const existing = await storage.getUserByUsername(data.username); // Prevent duplicate usernames.
       if (existing) {
         return res.status(409).json({ message: "Username already exists" });
       }
 
-      const user = await storage.createUser(data);
-      const { password, ...safeUser } = user; // Never return password.
+      const existingEmail = await storage.getUserByEmail(data.email);
+      if (existingEmail) {
+        return res.status(409).json({ message: "Email already exists" });
+      }
+
+      const hashedPassword = await hashPassword(data.password);
+      const user = await storage.createUser({ ...data, password: hashedPassword });
+      const safeUser = toSafeUser(user);
 
       await logAction(
         data.username,
@@ -39,8 +62,19 @@ export function registerAuthRoutes(app: Express): void {
       return res.status(400).json({ message: "Username and password are required" });
     }
 
+    const loginKey = `${req.ip || "unknown"}:${String(username).toLowerCase()}`;
+    const blockedForMs = getLoginBlockRemainingMs(loginKey);
+    if (blockedForMs > 0) {
+      return res.status(429).json({
+        message: `Too many failed login attempts. Try again in ${Math.ceil(blockedForMs / 60000)} minute(s).`,
+      });
+    }
+
     const user = await storage.getUserByUsername(username);
-    if (!user || user.password !== password) {
+    const isValidPassword = user ? await verifyPassword(password, user.password) : false;
+
+    if (!user || !isValidPassword) {
+      recordFailedLogin(loginKey);
       await logAction(
         username,
         "LOGIN_FAILED",
@@ -50,7 +84,19 @@ export function registerAuthRoutes(app: Express): void {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const { password: _, ...safeUser } = user; // Strip sensitive field.
+    clearFailedLogins(loginKey);
+
+    if (user && user.password === password) {
+      const upgradedPassword = await hashPassword(password);
+      await storage.updateUserPassword(user.id, upgradedPassword);
+      user.password = upgradedPassword;
+    }
+
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.role = user.role;
+
+    const safeUser = toSafeUser(user);
 
     await logAction(
       username,
@@ -63,15 +109,124 @@ export function registerAuthRoutes(app: Express): void {
   });
 
   app.post("/api/auth/logout", async (req, res) => {
-    const { username } = req.body;
+    const username = req.session.username || req.body.username;
     if (username) {
       await logAction(username, "LOGOUT", `${username} logged out`, req.ip || "unknown");
     }
+
+    req.session.destroy(() => undefined);
+    res.clearCookie("connect.sid");
     return res.json({ success: true });
   });
 
-  app.get("/api/doctors", async (_req, res) => {
+  app.get("/api/auth/session", async (req, res) => {
+    const user = await getSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ message: "No active session" });
+    }
+
+    return res.json(toSafeUser(user));
+  });
+
+  app.get("/api/doctors", requireAuth, async (_req, res) => {
     const allDoctors = await storage.getDoctors(); // Doctors come from users table.
-    return res.json(allDoctors);
+    return res.json(allDoctors.map((doctor) => toSafeUser(doctor)));
+  });
+
+  app.patch("/api/doctors/:id/profile", requireAuth, async (req, res) => {
+    try {
+      const doctorId = Number(req.params.id);
+      if (Number.isNaN(doctorId)) {
+        return res.status(400).json({ message: "Invalid doctor id" });
+      }
+
+      if (res.locals.user.id !== doctorId && res.locals.user.role !== "admin") {
+        return res.status(403).json({ message: "You can only update your own profile" });
+      }
+
+      const data = updateProfileSchema.parse(req.body);
+      const currentUser = await storage.getUser(doctorId);
+      if (!currentUser) {
+        return res.status(404).json({ message: "Doctor not found" });
+      }
+
+      if (data.email !== currentUser.email) {
+        const existingEmail = await storage.getUserByEmail(data.email);
+        if (existingEmail && existingEmail.id !== doctorId) {
+          return res.status(409).json({ message: "Email already exists" });
+        }
+      }
+
+      const updated = await storage.updateUserProfile(doctorId, data);
+      if (!updated) {
+        return res.status(404).json({ message: "Doctor not found" });
+      }
+
+      const safeDoctor = toSafeUser(updated);
+
+      await logAction(
+        updated.username,
+        "PROFILE_UPDATED",
+        `${updated.firstName} ${updated.lastName} updated account settings`,
+        req.ip || "unknown",
+      );
+
+      return res.json(safeDoctor);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(e).message });
+      }
+      throw e;
+    }
+  });
+
+  app.post("/api/doctors/:id/password", requireAuth, async (req, res) => {
+    try {
+      const doctorId = Number(req.params.id);
+      if (Number.isNaN(doctorId)) {
+        return res.status(400).json({ message: "Invalid doctor id" });
+      }
+
+      if (res.locals.user.id !== doctorId && res.locals.user.role !== "admin") {
+        return res.status(403).json({ message: "You can only update your own password" });
+      }
+
+      const data = changePasswordSchema.parse(req.body);
+      const passwordError = validatePasswordStrength(data.password);
+      if (passwordError) {
+        return res.status(400).json({ message: passwordError });
+      }
+
+      if (data.currentPassword === data.password) {
+        return res.status(400).json({ message: "New password must be different from current password" });
+      }
+
+      const user = await storage.getUser(doctorId);
+      if (!user) {
+        return res.status(404).json({ message: "Doctor not found" });
+      }
+
+      const matchesCurrentPassword = await verifyPassword(data.currentPassword, user.password);
+      if (!matchesCurrentPassword) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      const hashedPassword = await hashPassword(data.password);
+      await storage.updateUserPassword(doctorId, hashedPassword);
+
+      await logAction(
+        user.username,
+        "PASSWORD_UPDATED",
+        `${user.firstName} ${user.lastName} updated their password`,
+        req.ip || "unknown",
+      );
+
+      return res.json({ success: true });
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(e).message });
+      }
+      throw e;
+    }
   });
 }
