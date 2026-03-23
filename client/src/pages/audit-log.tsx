@@ -1,10 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Shield, LogOut, Search, Filter, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 type AuditLog = {
   id: number;
@@ -16,10 +14,10 @@ type AuditLog = {
 };
 
 const ACTION_STYLES: Record<string, { color: string; bg: string; icon: any }> = {
-  LOGIN:        { color: "text-green-700",  bg: "bg-green-50 border-green-200",  icon: CheckCircle },
-  LOGIN_FAILED: { color: "text-red-700",    bg: "bg-red-50 border-red-200",      icon: XCircle },
-  LOGOUT:       { color: "text-slate-600",  bg: "bg-slate-50 border-slate-200",  icon: LogOut },
-  REGISTER:     { color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",    icon: Info },
+  LOGIN: { color: "text-green-700", bg: "bg-green-50 border-green-200", icon: CheckCircle },
+  LOGIN_FAILED: { color: "text-red-700", bg: "bg-red-50 border-red-200", icon: XCircle },
+  LOGOUT: { color: "text-slate-600", bg: "bg-slate-50 border-slate-200", icon: LogOut },
+  REGISTER: { color: "text-blue-700", bg: "bg-blue-50 border-blue-200", icon: Info },
 };
 
 function getActionStyle(action: string) {
@@ -50,23 +48,35 @@ export default function AuditLogPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/audit-logs?passcode=999999");
-      if (!res.ok) throw new Error("Failed to fetch logs");
+      const res = await fetch("/api/audit-logs", {
+        credentials: "include",
+      });
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem("mediportal_user");
+        setLocation("/login");
+        return;
+      }
+      if (!res.ok) {
+        throw new Error("Failed to fetch logs");
+      }
+
       const data = await res.json();
       setLogs(data);
-    } catch (e) {
+    } catch {
       setError("Failed to load audit logs.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchLogs(); }, []);
+  useEffect(() => {
+    fetchLogs();
+  }, []);
 
-  const actions = ["ALL", ...Array.from(new Set(logs.map(l => l.action)))];
+  const actions = ["ALL", ...Array.from(new Set(logs.map((l) => l.action)))];
 
   const filtered = logs
-    .filter(l => {
+    .filter((l) => {
       if (actionFilter !== "ALL" && l.action !== actionFilter) return false;
       if (!search) return true;
       const q = search.toLowerCase();
@@ -84,14 +94,27 @@ export default function AuditLogPage() {
 
   const stats = {
     total: logs.length,
-    logins: logs.filter(l => l.action === "LOGIN").length,
-    failed: logs.filter(l => l.action === "LOGIN_FAILED").length,
-    registers: logs.filter(l => l.action === "REGISTER").length,
+    logins: logs.filter((l) => l.action === "LOGIN").length,
+    failed: logs.filter((l) => l.action === "LOGIN_FAILED").length,
+    registers: logs.filter((l) => l.action === "REGISTER").length,
+  };
+
+  const handleExit = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {}
+
+    localStorage.removeItem("mediportal_user");
+    setLocation("/login");
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <div className="border-b border-slate-800 bg-slate-900">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -117,7 +140,7 @@ export default function AuditLogPage() {
               variant="ghost"
               size="sm"
               className="text-slate-400 hover:text-white hover:bg-slate-800"
-              onClick={() => setLocation("/login")}
+              onClick={handleExit}
             >
               <LogOut className="w-4 h-4 mr-2" />
               Exit
@@ -127,8 +150,6 @@ export default function AuditLogPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-
-        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: "Total Events", value: stats.total, color: "text-white" },
@@ -143,7 +164,6 @@ export default function AuditLogPage() {
           ))}
         </div>
 
-        {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -173,11 +193,12 @@ export default function AuditLogPage() {
                   <button
                     key={action}
                     className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                      actionFilter === action
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-300 hover:bg-slate-800"
+                      actionFilter === action ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800"
                     }`}
-                    onClick={() => { setActionFilter(action); setFilterOpen(false); }}
+                    onClick={() => {
+                      setActionFilter(action);
+                      setFilterOpen(false);
+                    }}
                   >
                     {action === "ALL" ? "All Actions" : action}
                   </button>
@@ -196,7 +217,6 @@ export default function AuditLogPage() {
           </Button>
         </div>
 
-        {/* Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-800 text-xs font-semibold text-slate-500 uppercase tracking-wider">
             <div className="col-span-1">#</div>
@@ -222,7 +242,7 @@ export default function AuditLogPage() {
               No logs found matching your filters.
             </div>
           ) : (
-            filtered.map((log, i) => {
+            filtered.map((log) => {
               const style = getActionStyle(log.action);
               const Icon = style.icon;
               return (
@@ -236,7 +256,7 @@ export default function AuditLogPage() {
                     <p className="text-xs text-slate-500 font-mono">{formatTime(log.timestamp)}</p>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-sm text-slate-200 font-medium">{log.username || "—"}</span>
+                    <span className="text-sm text-slate-200 font-medium">{log.username || "-"}</span>
                   </div>
                   <div className="col-span-2">
                     <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${style.bg} ${style.color}`}>
@@ -245,10 +265,10 @@ export default function AuditLogPage() {
                     </span>
                   </div>
                   <div className="col-span-4">
-                    <p className="text-sm text-slate-300">{log.details || "—"}</p>
+                    <p className="text-sm text-slate-300">{log.details || "-"}</p>
                   </div>
                   <div className="col-span-1">
-                    <span className="text-xs text-slate-500 font-mono">{log.ipAddress || "—"}</span>
+                    <span className="text-xs text-slate-500 font-mono">{log.ipAddress || "-"}</span>
                   </div>
                 </div>
               );

@@ -115,6 +115,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   const handleSignOut = () => {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username: user?.username }),
+    }).catch(() => undefined);
     localStorage.removeItem("mediportal_user");
     navigate("/login");
   };

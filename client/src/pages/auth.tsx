@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Eye, EyeOff, ArrowRight, Shield, Lock } from "lucide-react";
+import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,9 +14,6 @@ export default function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [passcode, setPasscode] = useState("");
-  const [passcodeError, setPasscodeError] = useState("");
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -33,13 +23,19 @@ export default function AuthPage() {
       const res = await apiRequest("POST", "/api/auth/login", { username, password });
       const user = await res.json();
       localStorage.setItem("mediportal_user", JSON.stringify(user));
-      setLocation("/mfa");
+      setLocation(user.role === "admin" ? "/audit-log" : "/mfa");
     } catch (error: any) {
       const message = error?.message || "Login failed";
       if (message.startsWith("401:")) {
         toast({
           title: "Login Failed",
           description: "Invalid username or password",
+          variant: "destructive",
+        });
+      } else if (message.startsWith("429:")) {
+        toast({
+          title: "Too Many Attempts",
+          description: message.replace(/^429:\s*/, ""),
           variant: "destructive",
         });
       } else {
@@ -51,19 +47,6 @@ export default function AuthPage() {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handlePasscodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passcode === "999999") {
-      setAdminOpen(false);
-      setPasscode("");
-      setPasscodeError("");
-      setLocation("/audit-log");
-    } else {
-      setPasscodeError("Invalid passcode. Access denied.");
-      setPasscode("");
     }
   };
 
@@ -105,7 +88,7 @@ export default function AuthPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder="********"
                   className="h-11 bg-slate-50 border-slate-200 focus:bg-white transition-all duration-200 pr-10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -141,7 +124,7 @@ export default function AuthPage() {
           </form>
         </CardContent>
 
-        <CardFooter className="flex flex-col space-y-4 pt-2 pb-8 bg-slate-50/50 rounded-b-xl border-t border-slate-100 relative">
+        <CardFooter className="flex flex-col space-y-4 pt-2 pb-8 bg-slate-50/50 rounded-b-xl border-t border-slate-100">
           <div className="text-center text-sm text-slate-500">
             New here?{" "}
             <Link href="/signup">
@@ -155,61 +138,8 @@ export default function AuthPage() {
             Need help? Contact the <span className="font-medium text-slate-500 cursor-pointer hover:underline">IT Service Desk</span> at <br />
             <span className="font-mono text-slate-500">xxx-xxx-xxxx</span>
           </div>
-
-          {/* Admin link bottom right */}
-          <button
-            onClick={() => { setAdminOpen(true); setPasscodeError(""); setPasscode(""); }}
-            className="absolute bottom-3 right-4 flex items-center gap-1 text-xs text-slate-300 hover:text-slate-500 transition-colors"
-          >
-            <Shield className="w-3 h-3" />
-            Admin
-          </button>
         </CardFooter>
       </Card>
-
-      {/* Passcode Modal */}
-      <Dialog open={adminOpen} onOpenChange={setAdminOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center">
-                <Lock className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <DialogTitle>Admin Access</DialogTitle>
-                <DialogDescription>Enter the admin passcode to continue.</DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          <form onSubmit={handlePasscodeSubmit} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label htmlFor="passcode" className="text-slate-600 font-medium">Passcode</Label>
-              <Input
-                id="passcode"
-                type="password"
-                placeholder="••••••"
-                className="h-11 text-center text-xl tracking-widest bg-slate-50 border-slate-200"
-                value={passcode}
-                onChange={(e) => { setPasscode(e.target.value); setPasscodeError(""); }}
-                maxLength={6}
-                autoFocus
-              />
-              {passcodeError && (
-                <p className="text-xs text-red-500 font-medium">{passcodeError}</p>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setAdminOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="flex-1 bg-slate-900 hover:bg-slate-800">
-                <Shield className="w-4 h-4 mr-2" />
-                Access Logs
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
