@@ -23,6 +23,8 @@ async function getTransporter() {
 
 export async function sendOtpEmail(email: string, otpCode: string): Promise<string | false> {
   try {
+    console.log(`[MFA] OTP for ${email}: ${otpCode}`);
+
     const transporter = await getTransporter();
     
     let info = await transporter.sendMail({
