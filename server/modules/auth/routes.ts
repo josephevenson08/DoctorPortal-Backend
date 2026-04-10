@@ -9,7 +9,7 @@ import { clearFailedLogins, getLoginBlockRemainingMs, recordFailedLogin } from "
 import { hashPassword, validatePasswordStrength, verifyPassword } from "../../lib/password";
 import { sendOtpEmail } from "../../lib/email";
 
-const otpStore = new Map<number, { otp: string; expiresAt: Date }>();
+const otpStore = new Map<number, { otp: string; expiresAt: Date; failedAttempts: number }>();
 
 const updateProfileSchema = insertUserSchema.pick({
   email: true,
@@ -103,7 +103,7 @@ export function registerAuthRoutes(app: Express): void {
     // Generate 6 digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
-    otpStore.set(user.id, { otp: otpCode, expiresAt });
+    otpStore.set(user.id, { otp: otpCode, expiresAt, failedAttempts: 0 });
     
     // Ignore floating promise
     sendOtpEmail(user.email, otpCode).catch(console.error);
@@ -141,7 +141,12 @@ export function registerAuthRoutes(app: Express): void {
     }
 
     if (storedData.otp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP code" });
+      storedData.failedAttempts += 1;
+      if (storedData.failedAttempts >= 3) {
+        otpStore.delete(req.session.userId);
+        return res.status(401).json({ message: "Too many failed attempts. Please login again." });
+      }
+      return res.status(401).json({ message: `Invalid code. ${3 - storedData.failedAttempts} attempts remaining.` });
     }
 
     // Success!
